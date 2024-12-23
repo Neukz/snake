@@ -23,7 +23,6 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="cs8x8.bmp" />
-    <Image Include="eti.bmp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
