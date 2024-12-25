@@ -1,11 +1,11 @@
 #include <stdio.h>
+#include <string.h>
 
 extern "C"
 {
 #include "./SDL2-2.0.10/include/SDL.h"
 #include "./SDL2-2.0.10/include/SDL_main.h"
 }
-
 
 #define WINDOW_WIDTH 1080
 #define WINDOW_HEIGHT 640
@@ -14,7 +14,14 @@ extern "C"
 #define INFO_PANEL_HEIGHT 40
 #define SEGMENT_SIZE 20
 #define INITIAL_SNAKE_LENGTH 15
-
+#define SNAKE_MOVE_INTERVAL 100 // ms
+#define LEFT_EDGE (WINDOW_WIDTH - BOARD_WIDTH) / 2
+#define RIGHT_EDGE (WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE
+#define TOP_EDGE INFO_PANEL_HEIGHT
+#define BOTTOM_EDGE INFO_PANEL_HEIGHT + BOARD_HEIGHT - SEGMENT_SIZE
+#define BACKGROUND_COLOR 0x000000
+#define OUTLINE_COLOR 0xFFFFFF
+#define SNAKE_COLOR 0x00FF00
 
 typedef enum
 {
@@ -29,7 +36,6 @@ typedef struct
     int x;
     int y;
 } Segment;
-
 
 void DrawPixel(SDL_Surface* surface, int x, int y, Uint32 color)
 {
@@ -79,7 +85,6 @@ void DrawString(SDL_Surface* screen, int x, int y, const char* text, SDL_Surface
     }
 }
 
-
 class Snake
 {
 private:
@@ -87,6 +92,7 @@ private:
     Segment* body;
     Segment* head;
     Direction direction;
+	Uint32 lastMoveTime;
 
     int IsOppositeDirection(Direction newDirection)
     {
@@ -98,38 +104,28 @@ private:
 
     int IsDirectionIntoEdge(Direction newDirection)
     {
-        int leftEdge = (WINDOW_WIDTH - BOARD_WIDTH) / 2;
-        int rightEdge = (WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE;
-        int topEdge = INFO_PANEL_HEIGHT;
-        int bottomEdge = INFO_PANEL_HEIGHT + BOARD_HEIGHT - SEGMENT_SIZE;
-
-        return ((newDirection == LEFT && head->x <= leftEdge) ||
-            (newDirection == RIGHT && head->x >= rightEdge) ||
-            (newDirection == UP && head->y <= topEdge) ||
-            (newDirection == DOWN && head->y >= bottomEdge)) ? 1 : 0;
+        return ((newDirection == LEFT && head->x <= LEFT_EDGE) ||
+            (newDirection == RIGHT && head->x >= RIGHT_EDGE) ||
+            (newDirection == UP && head->y <= TOP_EDGE) ||
+            (newDirection == DOWN && head->y >= BOTTOM_EDGE)) ? 1 : 0;
     }
 
     // Change direction automatically when snake hits the edge
     void HandleEdgeInteraction()
     {
-        int leftEdge = (WINDOW_WIDTH - BOARD_WIDTH) / 2;
-        int rightEdge = (WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE;
-        int topEdge = INFO_PANEL_HEIGHT;
-        int bottomEdge = INFO_PANEL_HEIGHT + BOARD_HEIGHT - SEGMENT_SIZE;
-
-        if (direction == LEFT && head->x <= leftEdge)
+        if (direction == LEFT && head->x <= LEFT_EDGE)
         {
             direction = IsDirectionIntoEdge(UP) ? DOWN : UP;
         }
-        else if (direction == RIGHT && head->x >= rightEdge)
+        else if (direction == RIGHT && head->x >= RIGHT_EDGE)
         {
             direction = IsDirectionIntoEdge(DOWN) ? UP : DOWN;
         }
-        else if (direction == UP && head->y <= topEdge)
+        else if (direction == UP && head->y <= TOP_EDGE)
         {
             direction = IsDirectionIntoEdge(RIGHT) ? LEFT : RIGHT;
         }
-        else if (direction == DOWN && head->y >= bottomEdge)
+        else if (direction == DOWN && head->y >= BOTTOM_EDGE)
         {
             direction = IsDirectionIntoEdge(LEFT) ? RIGHT : LEFT;
         }
@@ -164,6 +160,7 @@ public:
         body = (Segment*)malloc(length * sizeof(Segment));
         head = &body[0];
         direction = RIGHT;
+		lastMoveTime = SDL_GetTicks();
         int startX = (WINDOW_WIDTH - BOARD_WIDTH) / 2 + BOARD_WIDTH / 2;
         int startY = INFO_PANEL_HEIGHT + BOARD_HEIGHT / 2;
         for (int i = 0; i < length; i++)
@@ -181,32 +178,37 @@ public:
         }
     }
 
-    int Move()
+    int Move(Uint32 currentTime)
     {
-        HandleEdgeInteraction();
-
-        for (int i = length - 1; i > 0; i--)
+		// Move snake with a fixed interval
+        if (currentTime - lastMoveTime >= SNAKE_MOVE_INTERVAL)
         {
-            body[i] = body[i - 1];  // Shift body segments
-        }
+            HandleEdgeInteraction();
 
-        // Move head based on current direction
-        switch (direction)
-        {
-            case UP:
-				head->y -= SEGMENT_SIZE;
-				break;
-            case DOWN:
-				head->y += SEGMENT_SIZE;
-				break;
-			case LEFT:
-				head->x -= SEGMENT_SIZE;
-				break;
-			case RIGHT:
-				head->x += SEGMENT_SIZE;
-				break;
-        }
+            for (int i = length - 1; i > 0; i--)
+            {
+                body[i] = body[i - 1];  // Shift body segments
+            }
 
+            // Move head based on current direction
+            switch (direction)
+            {
+                case UP:
+                    head->y -= SEGMENT_SIZE;
+                    break;
+                case DOWN:
+                    head->y += SEGMENT_SIZE;
+                    break;
+                case LEFT:
+                    head->x -= SEGMENT_SIZE;
+                    break;
+                case RIGHT:
+                    head->x += SEGMENT_SIZE;
+                    break;
+            }
+
+			lastMoveTime = currentTime;
+        }
         return SelfCollision();
     }
 
@@ -228,6 +230,7 @@ private:
     SDL_Surface* charset;
     SDL_Texture* scrtex;
     Snake snake;
+    Uint32 startTime;
     int quit;
     int gameOver;
 
@@ -253,6 +256,7 @@ private:
                                 break;
                             case SDLK_n:    // Restart game
                                 snake.Initialize();
+                                startTime = SDL_GetTicks();
                                 gameOver = 0;
                                 break;
                         }
@@ -260,20 +264,40 @@ private:
                 }
             }
 
-            Uint32 black = SDL_MapRGB(screen->format, 0, 0, 0);
-            Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
-
-            SDL_FillRect(screen, NULL, black);
-            DrawString(screen, (WINDOW_WIDTH - 350) / 2, WINDOW_HEIGHT / 2, "Game Over! Press 'n' to Restart or 'Esc' to Quit", charset);
-
-            SDL_UpdateTexture(scrtex, NULL, screen->pixels, screen->pitch);
-            SDL_RenderCopy(renderer, scrtex, NULL, NULL);
-            SDL_RenderPresent(renderer);
+            SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
+            DrawString(screen, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 2, "Game Over! Press 'Esc' to Quit or 'n' to Restart", charset);
+            
+            RefreshScreen();
         }
     }
 
+    void UpdateScreen()
+    {
+        float elapsedTime = (SDL_GetTicks() - startTime) * 0.001;
+        char info[256];
+        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4", elapsedTime);
+
+        // Draw info panel
+        DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
+        DrawString(screen, 15, 15, info, charset);
+
+        // Draw game board
+        DrawRectangle(screen, (WINDOW_WIDTH - BOARD_WIDTH) / 2, INFO_PANEL_HEIGHT, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
+
+        snake.Draw(screen, SNAKE_COLOR);
+
+		RefreshScreen();
+    }
+
+	void RefreshScreen()
+	{
+		SDL_UpdateTexture(scrtex, NULL, screen->pixels, screen->pitch);
+		SDL_RenderCopy(renderer, scrtex, NULL, NULL);
+		SDL_RenderPresent(renderer);
+	}
+
 public:
-    Game() : window(NULL), renderer(NULL), screen(NULL), charset(NULL), scrtex(NULL), quit(0), gameOver(0) {}
+    Game() : window(NULL), renderer(NULL), screen(NULL), charset(NULL), scrtex(NULL), startTime(0), quit(0), gameOver(0) {}
 
     ~Game()
     {
@@ -312,15 +336,12 @@ public:
             return 0;
         }
         SDL_SetColorKey(charset, 1, 0x000000);
+        startTime = SDL_GetTicks();
         return 1;
     }
 
     void Run()
     {
-        Uint32 black = SDL_MapRGB(screen->format, 0, 0, 0);
-        Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
-        Uint32 green = SDL_MapRGB(screen->format, 0, 255, 0);
-
         SDL_Event event;
         while (quit == 0)
         {
@@ -351,32 +372,20 @@ public:
                                 break;
                             case SDLK_n:    // Restart game
                                 snake.Initialize();
+                                startTime = SDL_GetTicks();
                                 break;
                         }
                         break;
                 }
             }
 
-            if (snake.Move())
+            if (snake.Move(SDL_GetTicks()))
             {
                 gameOver = 1;
                 HandleGameOver();
             }
 
-            // Draw info panel
-            DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, white, black);
-            DrawString(screen, 15, 15, "Press 'Esc' to Quit, 'n' for New Game", charset);
-
-            // Draw game board
-            DrawRectangle(screen, (WINDOW_WIDTH - BOARD_WIDTH) / 2, INFO_PANEL_HEIGHT, BOARD_WIDTH, BOARD_HEIGHT, white, black);
-
-            snake.Draw(screen, green);
-
-            SDL_UpdateTexture(scrtex, NULL, screen->pixels, screen->pitch);
-            SDL_RenderCopy(renderer, scrtex, NULL, NULL);
-            SDL_RenderPresent(renderer);
-
-            SDL_Delay(100); // Control speed
+            UpdateScreen();
         }
     }
 
@@ -390,7 +399,6 @@ public:
         SDL_Quit();
     }
 };
-
 
 int main(int argc, char** argv)
 {
