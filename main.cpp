@@ -15,7 +15,9 @@ extern "C"
 #define INFO_PANEL_HEIGHT 40
 #define SEGMENT_SIZE 20
 #define INITIAL_SNAKE_LENGTH 3
-#define SNAKE_MOVE_INTERVAL 100 // ms
+#define INITIAL_SNAKE_MOVE_INTERVAL 200 // ms
+#define SPEED_UP_INTERVAL 5000 // ms
+#define SPEED_UP_FACTOR 0.9
 #define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
 #define RIGHT_EDGE ((WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE)
 #define TOP_EDGE (INFO_PANEL_HEIGHT)
@@ -100,6 +102,7 @@ private:
     Segment* head;
     Direction direction;
     Uint32 lastMoveTime;
+    int moveInterval;
 
     int IsOppositeDirection(Direction newDirection)
     {
@@ -117,8 +120,7 @@ private:
             (newDirection == DOWN && head->y >= BOTTOM_EDGE)) ? 1 : 0;
     }
 
-    // Change direction automatically when snake hits the edge
-    void HandleEdgeInteraction()
+    void ChangeDirectionOnEdge()
     {
         if (direction == LEFT && head->x <= LEFT_EDGE)
         {
@@ -139,11 +141,6 @@ private:
     }
 
 public:
-    Snake()
-    {
-        Initialize();
-    }
-
     ~Snake()
     {
         free(body);
@@ -156,8 +153,9 @@ public:
         head = &body[0];
         direction = RIGHT;
         lastMoveTime = SDL_GetTicks();
-        int startX = (WINDOW_WIDTH - BOARD_WIDTH) / 2 + BOARD_WIDTH / 2;
-        int startY = INFO_PANEL_HEIGHT + BOARD_HEIGHT / 2;
+		moveInterval = INITIAL_SNAKE_MOVE_INTERVAL;
+        int startX = LEFT_EDGE + BOARD_WIDTH / 2;
+        int startY = TOP_EDGE + BOARD_HEIGHT / 2;
         for (int i = 0; i < length; i++)
         {
             body[i].x = startX - i * SEGMENT_SIZE;
@@ -213,9 +211,9 @@ public:
     void Move(Uint32 currentTime)
     {
 		// Move snake with a fixed interval
-        if (currentTime - lastMoveTime >= SNAKE_MOVE_INTERVAL)
+        if (currentTime - lastMoveTime >= moveInterval)
         {
-            HandleEdgeInteraction();
+            ChangeDirectionOnEdge();
 
             for (int i = length - 1; i > 0; i--)
             {
@@ -243,6 +241,11 @@ public:
         }
     }
 
+    void AdjustSpeed()
+    {
+        moveInterval = (int)(moveInterval * SPEED_UP_FACTOR);
+    }
+
 	void Draw(SDL_Surface* screen, Uint32 outlineColor, Uint32 fillColor)
     {
         for (int i = 0; i < length; i++)
@@ -260,11 +263,12 @@ private:
     SDL_Surface* screen;
     SDL_Surface* charset;
     SDL_Texture* scrtex;
+	SDL_Event event;
     Snake snake;
     Segment food;
     Uint32 startTime;
+	Uint32 lastSpeedUpTime;
     int quit;
-    int gameOver;
 
     void GenerateFood()
     {
@@ -272,13 +276,12 @@ private:
         {
             food.x = RandomInt(0, (BOARD_WIDTH / SEGMENT_SIZE) - 1) * SEGMENT_SIZE + LEFT_EDGE;
             food.y = RandomInt(0, (BOARD_HEIGHT / SEGMENT_SIZE) - 1) * SEGMENT_SIZE + TOP_EDGE;
-        } while (snake.CollidesWith(food)); // Prevent from from spawning on snake
+        } while (snake.CollidesWith(food)); // Prevent from spawning on snake
     }
 
-    void HandleGameOver()
+    void GameOver()
     {
-        SDL_Event event;
-        while (gameOver)
+        while (1)
         {
             while (SDL_PollEvent(&event))
             {
@@ -286,21 +289,16 @@ private:
                 {
                     case SDL_QUIT:
                         quit = 1;
-                        gameOver = 0;
-                        break;
+                        return;
                     case SDL_KEYDOWN:
                         switch (event.key.keysym.sym)
                         {
                             case SDLK_ESCAPE:
                                 quit = 1;
-                                gameOver = 0;
-                                break;
-                            case SDLK_n:    // Restart game
-                                snake.Initialize();
-                                GenerateFood();
-                                startTime = SDL_GetTicks();
-                                gameOver = 0;
-                                break;
+                                return;
+                            case SDLK_n:
+                                NewGame();
+                                return;
                         }
                         break;
                 }
@@ -317,7 +315,7 @@ private:
     {
         float elapsedTime = (SDL_GetTicks() - startTime) * 0.001;
         char info[256];
-        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4, A", elapsedTime);
+        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4, A, B", elapsedTime);
 
         // Draw info panel
         DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
@@ -341,8 +339,16 @@ private:
         SDL_RenderPresent(renderer);
     }
 
+    void NewGame()
+    {
+        snake.Initialize();
+        GenerateFood();
+        startTime = SDL_GetTicks();
+        lastSpeedUpTime = startTime;
+    }
+
 public:
-    Game() : window(NULL), renderer(NULL), screen(NULL), charset(NULL), scrtex(NULL), startTime(0), quit(0), gameOver(0) {}
+    Game() : window(NULL), renderer(NULL), screen(NULL), charset(NULL), scrtex(NULL), startTime(0), lastSpeedUpTime(0), quit(0) {}
 
     ~Game()
     {
@@ -382,14 +388,12 @@ public:
         }
         SDL_SetColorKey(charset, 1, 0x000000);
 
-        GenerateFood();
-        startTime = SDL_GetTicks();
+        NewGame();
         return 1;
     }
 
     void Run()
     {
-        SDL_Event event;
         while (quit == 0)
         {
             while (SDL_PollEvent(&event))
@@ -418,13 +422,18 @@ public:
                                 snake.SetDirection(RIGHT);
                                 break;
                             case SDLK_n:
-                                snake.Initialize();
-                                startTime = SDL_GetTicks();
-                                GenerateFood();
+                                NewGame();
                                 break;
                         }
                         break;
                 }
+            }
+
+            Uint32 currentTime = SDL_GetTicks();
+            if (currentTime - lastSpeedUpTime >= SPEED_UP_INTERVAL)
+            {
+                snake.AdjustSpeed();
+                lastSpeedUpTime = currentTime;
             }
 
             if (snake.HeadCollidesWith(food))
@@ -433,11 +442,10 @@ public:
                 GenerateFood();
             }
 
-            snake.Move(SDL_GetTicks());
+            snake.Move(currentTime);
             if (snake.SelfCollision())
             {
-                gameOver = 1;
-                HandleGameOver();
+                GameOver();
             }
 
             UpdateScreen();
