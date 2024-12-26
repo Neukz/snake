@@ -1,5 +1,6 @@
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
+#include <time.h>
 
 extern "C"
 {
@@ -13,15 +14,16 @@ extern "C"
 #define BOARD_HEIGHT 600
 #define INFO_PANEL_HEIGHT 40
 #define SEGMENT_SIZE 20
-#define INITIAL_SNAKE_LENGTH 15
+#define INITIAL_SNAKE_LENGTH 3
 #define SNAKE_MOVE_INTERVAL 100 // ms
-#define LEFT_EDGE (WINDOW_WIDTH - BOARD_WIDTH) / 2
-#define RIGHT_EDGE (WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE
-#define TOP_EDGE INFO_PANEL_HEIGHT
-#define BOTTOM_EDGE INFO_PANEL_HEIGHT + BOARD_HEIGHT - SEGMENT_SIZE
+#define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
+#define RIGHT_EDGE ((WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE)
+#define TOP_EDGE (INFO_PANEL_HEIGHT)
+#define BOTTOM_EDGE (INFO_PANEL_HEIGHT + BOARD_HEIGHT - SEGMENT_SIZE)
 #define BACKGROUND_COLOR 0x000000
 #define OUTLINE_COLOR 0xFFFFFF
 #define SNAKE_COLOR 0x00FF00
+#define FOOD_COLOR 0x0000FF
 
 typedef enum
 {
@@ -36,6 +38,11 @@ typedef struct
     int x;
     int y;
 } Segment;
+
+int RandomInt(int min, int max)
+{
+    return rand() % (max - min + 1) + min;
+}
 
 void DrawPixel(SDL_Surface* surface, int x, int y, Uint32 color)
 {
@@ -92,7 +99,7 @@ private:
     Segment* body;
     Segment* head;
     Direction direction;
-	Uint32 lastMoveTime;
+    Uint32 lastMoveTime;
 
     int IsOppositeDirection(Direction newDirection)
     {
@@ -131,18 +138,6 @@ private:
         }
     }
 
-    int SelfCollision()
-    {
-        for (int i = 1; i < length; i++)
-        {
-            if (body[i].x == head->x && body[i].y == head->y)
-            {
-                return 1;
-            }
-        }
-        return 0;
-    }
-
 public:
     Snake()
     {
@@ -160,7 +155,7 @@ public:
         body = (Segment*)malloc(length * sizeof(Segment));
         head = &body[0];
         direction = RIGHT;
-		lastMoveTime = SDL_GetTicks();
+        lastMoveTime = SDL_GetTicks();
         int startX = (WINDOW_WIDTH - BOARD_WIDTH) / 2 + BOARD_WIDTH / 2;
         int startY = INFO_PANEL_HEIGHT + BOARD_HEIGHT / 2;
         for (int i = 0; i < length; i++)
@@ -178,7 +173,44 @@ public:
         }
     }
 
-    int Move(Uint32 currentTime)
+    int CollidesWith(Segment segment)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            if (body[i].x == segment.x && body[i].y == segment.y)
+            {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    int HeadCollidesWith(Segment segment)
+    {
+        return (head->x == segment.x && head->y == segment.y) ? 1 : 0;
+    }
+
+    int SelfCollision()
+    {
+        for (int i = 1; i < length; i++)
+        {
+            if (HeadCollidesWith(body[i]))
+            {
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    void Grow()
+    {
+        length++;
+        body = (Segment*)realloc(body, length * sizeof(Segment));
+        body[length - 1] = body[length - 2];
+		head = &body[0];
+    }
+
+    void Move(Uint32 currentTime)
     {
 		// Move snake with a fixed interval
         if (currentTime - lastMoveTime >= SNAKE_MOVE_INTERVAL)
@@ -207,16 +239,15 @@ public:
                     break;
             }
 
-			lastMoveTime = currentTime;
+            lastMoveTime = currentTime;
         }
-        return SelfCollision();
     }
 
-    void Draw(SDL_Surface* screen, Uint32 color)
+	void Draw(SDL_Surface* screen, Uint32 outlineColor, Uint32 fillColor)
     {
         for (int i = 0; i < length; i++)
         {
-            DrawRectangle(screen, body[i].x, body[i].y, SEGMENT_SIZE, SEGMENT_SIZE, color, color);
+            DrawRectangle(screen, body[i].x, body[i].y, SEGMENT_SIZE, SEGMENT_SIZE, outlineColor, fillColor);
         }
     }
 };
@@ -230,9 +261,19 @@ private:
     SDL_Surface* charset;
     SDL_Texture* scrtex;
     Snake snake;
+    Segment food;
     Uint32 startTime;
     int quit;
     int gameOver;
+
+    void GenerateFood()
+    {
+        do
+        {
+            food.x = RandomInt(0, (BOARD_WIDTH / SEGMENT_SIZE) - 1) * SEGMENT_SIZE + LEFT_EDGE;
+            food.y = RandomInt(0, (BOARD_HEIGHT / SEGMENT_SIZE) - 1) * SEGMENT_SIZE + TOP_EDGE;
+        } while (snake.CollidesWith(food)); // Prevent from from spawning on snake
+    }
 
     void HandleGameOver()
     {
@@ -256,6 +297,7 @@ private:
                                 break;
                             case SDLK_n:    // Restart game
                                 snake.Initialize();
+                                GenerateFood();
                                 startTime = SDL_GetTicks();
                                 gameOver = 0;
                                 break;
@@ -266,7 +308,7 @@ private:
 
             SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
             DrawString(screen, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 2, "Game Over! Press 'Esc' to Quit or 'n' to Restart", charset);
-            
+
             RefreshScreen();
         }
     }
@@ -275,26 +317,29 @@ private:
     {
         float elapsedTime = (SDL_GetTicks() - startTime) * 0.001;
         char info[256];
-        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4", elapsedTime);
+        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4, A", elapsedTime);
 
         // Draw info panel
         DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
         DrawString(screen, 15, 15, info, charset);
 
         // Draw game board
-        DrawRectangle(screen, (WINDOW_WIDTH - BOARD_WIDTH) / 2, INFO_PANEL_HEIGHT, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
+        DrawRectangle(screen, LEFT_EDGE, TOP_EDGE, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
 
-        snake.Draw(screen, SNAKE_COLOR);
+		snake.Draw(screen, BACKGROUND_COLOR, SNAKE_COLOR);
 
-		RefreshScreen();
+		// Draw food
+        DrawRectangle(screen, food.x, food.y, SEGMENT_SIZE, SEGMENT_SIZE, BACKGROUND_COLOR, FOOD_COLOR);
+
+        RefreshScreen();
     }
 
-	void RefreshScreen()
-	{
-		SDL_UpdateTexture(scrtex, NULL, screen->pixels, screen->pitch);
-		SDL_RenderCopy(renderer, scrtex, NULL, NULL);
-		SDL_RenderPresent(renderer);
-	}
+    void RefreshScreen()
+    {
+        SDL_UpdateTexture(scrtex, NULL, screen->pixels, screen->pitch);
+        SDL_RenderCopy(renderer, scrtex, NULL, NULL);
+        SDL_RenderPresent(renderer);
+    }
 
 public:
     Game() : window(NULL), renderer(NULL), screen(NULL), charset(NULL), scrtex(NULL), startTime(0), quit(0), gameOver(0) {}
@@ -329,13 +374,15 @@ public:
         scrtex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         charset = SDL_LoadBMP("cs8x8.bmp");
-        if (!charset)
+        if (charset == NULL)
         {
             printf("SDL_LoadBMP(cs8x8.bmp) error: %s\n", SDL_GetError());
             Cleanup();
             return 0;
         }
         SDL_SetColorKey(charset, 1, 0x000000);
+
+        GenerateFood();
         startTime = SDL_GetTicks();
         return 1;
     }
@@ -370,16 +417,24 @@ public:
                             case SDLK_RIGHT:
                                 snake.SetDirection(RIGHT);
                                 break;
-                            case SDLK_n:    // Restart game
+                            case SDLK_n:
                                 snake.Initialize();
                                 startTime = SDL_GetTicks();
+                                GenerateFood();
                                 break;
                         }
                         break;
                 }
             }
 
-            if (snake.Move(SDL_GetTicks()))
+            if (snake.HeadCollidesWith(food))
+            {
+                snake.Grow();
+                GenerateFood();
+            }
+
+            snake.Move(SDL_GetTicks());
+            if (snake.SelfCollision())
             {
                 gameOver = 1;
                 HandleGameOver();
@@ -402,6 +457,8 @@ public:
 
 int main(int argc, char** argv)
 {
+    srand(time(NULL));
+
     Game game;
     if (game.Initialize() == 0)
     {
