@@ -269,6 +269,7 @@ private:
     Uint32 startTime;
 	Uint32 lastSpeedUpTime;
     int quit;
+    int initialized;
 
     void GenerateFood()
     {
@@ -348,26 +349,21 @@ private:
     }
 
 public:
-    Game() : window(NULL), renderer(NULL), screen(NULL), charset(NULL), scrtex(NULL), startTime(0), lastSpeedUpTime(0), quit(0) {}
-
-    ~Game()
+    Game()
     {
-        Cleanup();
-    }
-
-    int Initialize()
-    {
+		quit = 0;
+		initialized = 0;
         if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
         {
             printf("SDL_Init error: %s\n", SDL_GetError());
-            return 0;
+            return;
         }
 
         if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, 0, &window, &renderer) != 0)
         {
             printf("SDL_CreateWindowAndRenderer error: %s\n", SDL_GetError());
             SDL_Quit();
-            return 0;
+            return;
         }
 
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
@@ -384,13 +380,23 @@ public:
         {
             printf("SDL_LoadBMP(cs8x8.bmp) error: %s\n", SDL_GetError());
             Cleanup();
-            return 0;
+            return;
         }
         SDL_SetColorKey(charset, 1, 0x000000);
 
         NewGame();
-        return 1;
+        initialized = 1;
     }
+
+    ~Game()
+    {
+        Cleanup();
+    }
+
+	int GetInitialized()
+	{
+		return initialized;
+	}
 
     void Run()
     {
@@ -468,7 +474,7 @@ int main(int argc, char** argv)
     srand(time(NULL));
 
     Game game;
-    if (game.Initialize() == 0)
+	if (game.GetInitialized() == 0)
     {
         return 1;
     }
