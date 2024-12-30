@@ -24,7 +24,7 @@ extern "C"
 #define BOTTOM_EDGE (TOP_EDGE + BOARD_HEIGHT - SEGMENT_SIZE)
 
 // Snake and timing settings
-#define INITIAL_SNAKE_LENGTH 3
+#define INITIAL_SNAKE_LENGTH 3  // Number of segments
 #define INITIAL_SNAKE_MOVE_INTERVAL 200 // ms
 #define SPEED_UP_INTERVAL 5000 // ms
 #define SPEED_UP_FACTOR 0.9 // range (0, 1) for increasing speed
@@ -56,6 +56,7 @@ int RandomInt(int min, int max)
     return rand() % (max - min + 1) + min;
 }
 
+// --- DRAWING FUNCTIONS ---
 void DrawPixel(SDL_Surface* surface, int x, int y, Uint32 color)
 {
     int bpp = surface->format->BytesPerPixel;
@@ -63,21 +64,29 @@ void DrawPixel(SDL_Surface* surface, int x, int y, Uint32 color)
     *(Uint32*)p = color;
 }
 
+void DrawLine(SDL_Surface* screen, int x, int y, int length, int dx, int dy, Uint32 color)
+{
+    for (int i = 0; i < length; i++)
+    {
+        DrawPixel(screen, x, y, color);
+        x += dx;
+        y += dy;
+    }
+}
+
 void DrawRectangle(SDL_Surface* screen, int x, int y, int width, int height, Uint32 outlineColor, Uint32 fillColor)
 {
-    for (int row = y; row < y + height; row++)
+	if (outlineColor != NULL)   // Outline is optional
     {
-        for (int col = x; col < x + width; col++)
-        {
-            if (row == y || row == y + height - 1 || col == x || col == x + width - 1)
-            {
-                DrawPixel(screen, col, row, outlineColor);
-            }
-            else
-            {
-                DrawPixel(screen, col, row, fillColor);
-            }
-        }
+        DrawLine(screen, x, y, height, 0, 1, outlineColor);
+        DrawLine(screen, x + width - 1, y, height, 0, 1, outlineColor);
+        DrawLine(screen, x, y, width, 1, 0, outlineColor);
+        DrawLine(screen, x, y + height - 1, width, 1, 0, outlineColor);
+    }
+
+    for (int i = y + 1; i < y + height - 1; i++)
+    {
+        DrawLine(screen, x + 1, i, width - 2, 1, 0, fillColor);
     }
 }
 
@@ -257,11 +266,11 @@ public:
         moveInterval = (int)(moveInterval * SPEED_UP_FACTOR);
     }
 
-	void Draw(SDL_Surface* screen, Uint32 outlineColor, Uint32 fillColor)
+	void Draw(SDL_Surface* screen)
     {
         for (int i = 0; i < length; i++)
         {
-            DrawRectangle(screen, body[i].x, body[i].y, SEGMENT_SIZE, SEGMENT_SIZE, outlineColor, fillColor);
+            DrawRectangle(screen, body[i].x, body[i].y, SEGMENT_SIZE, SEGMENT_SIZE, NULL, SNAKE_COLOR);
         }
     }
 };
@@ -336,10 +345,10 @@ private:
         // Draw game board
         DrawRectangle(screen, LEFT_EDGE, TOP_EDGE, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
 
-		snake.Draw(screen, BACKGROUND_COLOR, SNAKE_COLOR);
-
 		// Draw food
-        DrawRectangle(screen, food.x, food.y, SEGMENT_SIZE, SEGMENT_SIZE, BACKGROUND_COLOR, FOOD_COLOR);
+        DrawRectangle(screen, food.x, food.y, SEGMENT_SIZE, SEGMENT_SIZE, NULL, FOOD_COLOR);
+		
+        snake.Draw(screen);
 
         RefreshScreen();
     }
