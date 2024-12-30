@@ -8,25 +8,34 @@ extern "C"
 #include "./SDL2-2.0.10/include/SDL_main.h"
 }
 
+// --- CONFIGURATION ---
+// Screen dimensions
 #define WINDOW_WIDTH 1080
 #define WINDOW_HEIGHT 640
-#define BOARD_WIDTH 800
-#define BOARD_HEIGHT 600
+#define SEGMENT_SIZE 20 // Basic board unit
 #define INFO_PANEL_HEIGHT 40
-#define SEGMENT_SIZE 20
+#define BOARD_WIDTH (SEGMENT_SIZE * 40)
+#define BOARD_HEIGHT (SEGMENT_SIZE * 30)
+
+// Board edges (x and y coordinates)
+#define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
+#define RIGHT_EDGE (LEFT_EDGE + BOARD_WIDTH - SEGMENT_SIZE)
+#define TOP_EDGE (INFO_PANEL_HEIGHT)
+#define BOTTOM_EDGE (TOP_EDGE + BOARD_HEIGHT - SEGMENT_SIZE)
+
+// Snake and timing settings
 #define INITIAL_SNAKE_LENGTH 3
 #define INITIAL_SNAKE_MOVE_INTERVAL 200 // ms
 #define SPEED_UP_INTERVAL 5000 // ms
-#define SPEED_UP_FACTOR 0.9
-#define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
-#define RIGHT_EDGE ((WINDOW_WIDTH + BOARD_WIDTH) / 2 - SEGMENT_SIZE)
-#define TOP_EDGE (INFO_PANEL_HEIGHT)
-#define BOTTOM_EDGE (INFO_PANEL_HEIGHT + BOARD_HEIGHT - SEGMENT_SIZE)
+#define SPEED_UP_FACTOR 0.9 // range (0, 1) for increasing speed
+
+// Colors
 #define BACKGROUND_COLOR 0x000000
 #define OUTLINE_COLOR 0xFFFFFF
 #define SNAKE_COLOR 0x00FF00
 #define FOOD_COLOR 0x0000FF
 
+// --- TYPE DEFINITIONS ---
 typedef enum
 {
     UP,
@@ -41,6 +50,7 @@ typedef struct
     int y;
 } Segment;
 
+// --- UTILITY FUNCTIONS ---
 int RandomInt(int min, int max)
 {
     return rand() % (max - min + 1) + min;
@@ -94,12 +104,13 @@ void DrawString(SDL_Surface* screen, int x, int y, const char* text, SDL_Surface
     }
 }
 
+// --- CLASSES ---
 class Snake
 {
 private:
     int length;
     Segment* body;
-    Segment* head;
+	Segment* head;  // Pointer to body[0]
     Direction direction;
     Uint32 lastMoveTime;
     int moveInterval;
@@ -154,8 +165,8 @@ public:
         direction = RIGHT;
         lastMoveTime = SDL_GetTicks();
 		moveInterval = INITIAL_SNAKE_MOVE_INTERVAL;
-        int startX = LEFT_EDGE + BOARD_WIDTH / 2;
-        int startY = TOP_EDGE + BOARD_HEIGHT / 2;
+        int startX = LEFT_EDGE + (BOARD_WIDTH / 2 / SEGMENT_SIZE) * SEGMENT_SIZE;   // Start in the middle of the board
+        int startY = TOP_EDGE + (BOARD_HEIGHT / 2 / SEGMENT_SIZE) * SEGMENT_SIZE;
         for (int i = 0; i < length; i++)
         {
             body[i].x = startX - i * SEGMENT_SIZE;
@@ -268,15 +279,15 @@ private:
     Segment food;
     Uint32 startTime;
 	Uint32 lastSpeedUpTime;
-    int quit;
-    int initialized;
+    int quit;           // Flag to check if the game should end
+	int initialized;    // Flag to check if initialization was successful
 
     void GenerateFood()
     {
         do
         {
-            food.x = RandomInt(0, (BOARD_WIDTH / SEGMENT_SIZE) - 1) * SEGMENT_SIZE + LEFT_EDGE;
-            food.y = RandomInt(0, (BOARD_HEIGHT / SEGMENT_SIZE) - 1) * SEGMENT_SIZE + TOP_EDGE;
+            food.x = LEFT_EDGE + RandomInt(0, (BOARD_WIDTH / SEGMENT_SIZE) - 1) * SEGMENT_SIZE;
+            food.y = TOP_EDGE + RandomInt(0, (BOARD_HEIGHT / SEGMENT_SIZE) - 1) * SEGMENT_SIZE;
         } while (snake.CollidesWith(food)); // Prevent from spawning on snake
     }
 
@@ -314,7 +325,7 @@ private:
 
     void UpdateScreen()
     {
-        float elapsedTime = (SDL_GetTicks() - startTime) * 0.001;
+		float elapsedTime = (SDL_GetTicks() - startTime) * 0.001;   // Convert ms to s
         char info[256];
         sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4, A, B", elapsedTime);
 
@@ -469,6 +480,7 @@ public:
     }
 };
 
+// --- MAIN PROGRAM ---
 int main(int argc, char** argv)
 {
     srand(time(NULL));
@@ -476,10 +488,10 @@ int main(int argc, char** argv)
     Game game;
 	if (game.GetInitialized() == 0)
     {
-        return 1;
+		return EXIT_FAILURE;
     }
 
     game.Run();
 
-    return 0;
+    return EXIT_SUCCESS;
 }
