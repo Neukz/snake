@@ -1,3 +1,13 @@
+/*
+    Snake
+    Kacper Neumann, 203394
+
+    This game has been developed based on the SDL2 demo program provided by Prof. Dariusz Dereniowski.
+
+    Functions/methods do not exceed 1024 bytes.
+    Counter: https://gre-v-el.github.io/Cpp-Func-Length-Counter/
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -24,6 +34,8 @@ extern "C"
 #define BOTTOM_EDGE (TOP_EDGE + BOARD_HEIGHT - SEGMENT_SIZE)
 
 // Snake and timing settings
+#define INITIAL_SNAKE_X (LEFT_EDGE + (BOARD_WIDTH / 2 / SEGMENT_SIZE) * SEGMENT_SIZE)   // Start in the middle of the board
+#define INITIAL_SNAKE_Y (TOP_EDGE + (BOARD_HEIGHT / 2 / SEGMENT_SIZE) * SEGMENT_SIZE)
 #define INITIAL_SNAKE_LENGTH 3  // Number of segments
 #define INITIAL_SNAKE_MOVE_INTERVAL 200 // ms
 #define SPEED_UP_INTERVAL 5000 // ms
@@ -174,12 +186,10 @@ public:
         direction = RIGHT;
         lastMoveTime = SDL_GetTicks();
 		moveInterval = INITIAL_SNAKE_MOVE_INTERVAL;
-        int startX = LEFT_EDGE + (BOARD_WIDTH / 2 / SEGMENT_SIZE) * SEGMENT_SIZE;   // Start in the middle of the board
-        int startY = TOP_EDGE + (BOARD_HEIGHT / 2 / SEGMENT_SIZE) * SEGMENT_SIZE;
         for (int i = 0; i < length; i++)
         {
-            body[i].x = startX - i * SEGMENT_SIZE;
-            body[i].y = startY;
+            body[i].x = INITIAL_SNAKE_X - i * SEGMENT_SIZE;
+            body[i].y = INITIAL_SNAKE_Y;
         }
     }
 
