@@ -24,16 +24,23 @@ extern "C"
 #define WINDOW_WIDTH 1080
 #define WINDOW_HEIGHT 640
 #define SEGMENT_SIZE 20 // Basic board unit
-#define INFO_PANEL_HEIGHT 40
+#define INFO_HEIGHT 50
 #define BOARD_WIDTH (SEGMENT_SIZE * 25)
 #define BOARD_HEIGHT (SEGMENT_SIZE * 25)
-#define GAME_OVER_TEXT_SCALE 2.5
+#define PROGRESS_BAR_WIDTH 200
+#define PROGRESS_BAR_HEIGHT 20
 
-// Board edges (x and y coordinates)
+// Positioning
 #define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
-#define RIGHT_EDGE (LEFT_EDGE + BOARD_WIDTH - SEGMENT_SIZE)
-#define TOP_EDGE (INFO_PANEL_HEIGHT)
-#define BOTTOM_EDGE (TOP_EDGE + BOARD_HEIGHT - SEGMENT_SIZE)
+#define RIGHT_EDGE (LEFT_EDGE + BOARD_WIDTH)
+#define TOP_EDGE (INFO_HEIGHT)
+#define BOTTOM_EDGE (TOP_EDGE + BOARD_HEIGHT)
+#define PROGRESS_BAR_X ((WINDOW_WIDTH - PROGRESS_BAR_WIDTH) / 2)
+#define PROGRESS_BAR_Y (BOTTOM_EDGE + 10)
+
+// Text settings
+#define INFO_TEXT_SCALE 1
+#define GAME_OVER_TEXT_SCALE 2.5
 
 // Snake settings
 #define INITIAL_SNAKE_X (LEFT_EDGE + (BOARD_WIDTH / 2 / SEGMENT_SIZE) * SEGMENT_SIZE)   // Start in the middle of the board
@@ -82,6 +89,12 @@ int RandomInt(int min, int max)
     return rand() % (max - min + 1) + min;
 }
 
+// Get the starting x-coordinate for displaying centered text
+int CenterTextX(const char* text, float scale)
+{
+	return (WINDOW_WIDTH - strlen(text) * 8 * scale) / 2;
+}
+
 // --- DRAWING FUNCTIONS ---
 void DrawPixel(SDL_Surface* surface, int x, int y, Uint32 color)
 {
@@ -110,9 +123,12 @@ void DrawRectangle(SDL_Surface* screen, int x, int y, int width, int height, Uin
         DrawLine(screen, x, y + height - 1, width, 1, 0, outlineColor);
     }
 
-    for (int i = y + 1; i < y + height - 1; i++)
+	if (fillColor != NULL)  // Fill is optional
     {
-        DrawLine(screen, x + 1, i, width - 2, 1, 0, fillColor);
+        for (int i = y + 1; i < y + height - 1; i++)
+        {
+            DrawLine(screen, x + 1, i, width - 2, 1, 0, fillColor);
+        }
     }
 }
 
@@ -161,9 +177,9 @@ private:
     int IsDirectionIntoEdge(Direction newDirection)
     {
         return ((newDirection == LEFT && head->x <= LEFT_EDGE) ||
-            (newDirection == RIGHT && head->x >= RIGHT_EDGE) ||
+            (newDirection == RIGHT && head->x >= RIGHT_EDGE - SEGMENT_SIZE) ||
             (newDirection == UP && head->y <= TOP_EDGE) ||
-            (newDirection == DOWN && head->y >= BOTTOM_EDGE)) ? 1 : 0;
+            (newDirection == DOWN && head->y >= BOTTOM_EDGE - SEGMENT_SIZE)) ? 1 : 0;
     }
 
     void ChangeDirectionOnEdge()
@@ -172,7 +188,7 @@ private:
         {
             direction = IsDirectionIntoEdge(UP) ? DOWN : UP;
         }
-        else if (direction == RIGHT && head->x >= RIGHT_EDGE)
+        else if (direction == RIGHT && head->x >= RIGHT_EDGE - SEGMENT_SIZE)
         {
             direction = IsDirectionIntoEdge(DOWN) ? UP : DOWN;
         }
@@ -180,7 +196,7 @@ private:
         {
             direction = IsDirectionIntoEdge(RIGHT) ? LEFT : RIGHT;
         }
-        else if (direction == DOWN && head->y >= BOTTOM_EDGE)
+        else if (direction == DOWN && head->y >= BOTTOM_EDGE - SEGMENT_SIZE)
         {
             direction = IsDirectionIntoEdge(LEFT) ? RIGHT : LEFT;
         }
@@ -359,8 +375,9 @@ private:
         }
         else
         {
-            int barWidth = (int)((1.0 - (float)elapsedTime / BONUS_DURATION) * BOARD_WIDTH);
-            DrawRectangle(screen, LEFT_EDGE, INFO_PANEL_HEIGHT - 10, barWidth, 5, NULL, BONUS_COLOR);
+            int barWidth = (int)((1.0 - (float)elapsedTime / BONUS_DURATION) * PROGRESS_BAR_WIDTH);
+            DrawRectangle(screen, PROGRESS_BAR_X, PROGRESS_BAR_Y, PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT, OUTLINE_COLOR, NULL);
+            DrawRectangle(screen, PROGRESS_BAR_X, PROGRESS_BAR_Y, barWidth, PROGRESS_BAR_HEIGHT, NULL, BONUS_COLOR);
         }
     }
 
@@ -392,14 +409,13 @@ private:
             SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
 
             const char* gameOver = "Game Over!";
-            char scoreInfo[32];
-            sprintf(scoreInfo, "Score: %d", points);
+            char score[32];
+            sprintf(score, "Score: %d", points);
             const char* hint = "Press 'Esc' to Quit or 'n' to Restart";
-			int textScale = 8 * GAME_OVER_TEXT_SCALE;   // Scale up and adjust the position based on the text size
 
-            DrawString(screen, (WINDOW_WIDTH - textScale * strlen(gameOver)) / 2, WINDOW_HEIGHT / 2 - 50, "Game Over!", charset, GAME_OVER_TEXT_SCALE);
-            DrawString(screen, (WINDOW_WIDTH - textScale * strlen(scoreInfo)) / 2, WINDOW_HEIGHT / 2, scoreInfo, charset, GAME_OVER_TEXT_SCALE);
-            DrawString(screen, (WINDOW_WIDTH - textScale * strlen(hint)) / 2, WINDOW_HEIGHT / 2 + 50, "Press 'Esc' to Quit or 'n' to Restart", charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, CenterTextX(gameOver, GAME_OVER_TEXT_SCALE), WINDOW_HEIGHT / 2 - 50, gameOver, charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, CenterTextX(score, GAME_OVER_TEXT_SCALE), WINDOW_HEIGHT / 2, score, charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, CenterTextX(hint, GAME_OVER_TEXT_SCALE), WINDOW_HEIGHT / 2 + 50, hint, charset, GAME_OVER_TEXT_SCALE);;
 
             RefreshScreen();
         }
@@ -479,12 +495,12 @@ private:
         SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
 
 		float elapsedTime = (currentTime - startTime) * 0.001;   // Convert ms to s
-        char info[256];
-        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Score: %d | Implemented Requirements: 1, 2, 3, 4, A, B, C, D", elapsedTime, points);
+		char info[256];
+        sprintf(info, "'Esc' - Quit  |  'n' - Restart  |  Time: %.2f s  |  Score: %d  |  Implemented Requirements: 1, 2, 3, 4, A, B, C, D", elapsedTime, points);
 
-        // Draw info panel
-        DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
-        DrawString(screen, 15, 15, info, charset, 1);
+        // Draw info
+        DrawString(screen, CenterTextX(info, 1), 20, info, charset, INFO_TEXT_SCALE);
+        DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
 
         // Draw game board
         DrawRectangle(screen, LEFT_EDGE, TOP_EDGE, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
