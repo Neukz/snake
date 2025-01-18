@@ -39,7 +39,10 @@ extern "C"
 #define INITIAL_SNAKE_LENGTH 3  // Number of segments
 #define INITIAL_SNAKE_MOVE_INTERVAL 200 // ms
 #define SPEED_UP_INTERVAL 5000 // ms
-#define SPEED_UP_FACTOR 0.9 // Range (0, 1) for increasing speed
+#define SPEED_UP_FACTOR 0.95 // Range (0, 1) for increasing speed
+
+// Food settings
+#define FOOD_POINTS 1
 
 // Bonus dot settings
 #define BONUS_PROBABILITY 30 // %
@@ -47,13 +50,14 @@ extern "C"
 #define BONUS_DURATION 7000 // ms
 #define BONUS_SHRINK_COUNT 3 // Segments to shorten
 #define BONUS_SLOW_DOWN_FACTOR 1.2 // Range (1, inf) for decreasing speed
+#define BONUS_POINTS 2
 
 // Colors
 #define BACKGROUND_COLOR 0x000000
 #define OUTLINE_COLOR 0xFFFFFF
 #define SNAKE_COLOR 0x00FF00
 #define FOOD_COLOR 0x0000FF
-#define RED_DOT_COLOR 0xFF0000
+#define BONUS_COLOR 0xFF0000
 
 // --- TYPE DEFINITIONS ---
 typedef enum
@@ -320,6 +324,7 @@ private:
     Uint32 currentTime;
 	Uint32 lastSpeedUpTime;
 	Uint32 lastBonusTime;
+    int points;
 	int bonusActive;
     int quit;           // Flag to check if the game should end
 	int initialized;    // Flag to check if initialization was successful
@@ -353,7 +358,7 @@ private:
         else
         {
             int barWidth = (int)((1.0 - (float)elapsedTime / BONUS_DURATION) * BOARD_WIDTH);
-            DrawRectangle(screen, LEFT_EDGE, INFO_PANEL_HEIGHT - 10, barWidth, 5, NULL, RED_DOT_COLOR);
+            DrawRectangle(screen, LEFT_EDGE, INFO_PANEL_HEIGHT - 10, barWidth, 5, NULL, BONUS_COLOR);
         }
 
     }
@@ -384,7 +389,10 @@ private:
             }
 
             SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
-            DrawString(screen, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 2, "Game Over! Press 'Esc' to Quit or 'n' to Restart", charset);
+
+            char info[256];
+            sprintf(info, "Game Over! Your Score: %d | Press 'Esc' to Quit or 'n' to Restart", points);
+            DrawString(screen, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 2, info, charset);
 
             RefreshScreen();
         }
@@ -445,6 +453,7 @@ private:
 
         if (bonusActive && snake.HeadCollidesWith(bonus))
         {
+			points += BONUS_POINTS;
             bonusActive = 0;
             lastBonusTime = currentTime;
             if (RandomInt(0, 1) == 0)
@@ -462,7 +471,7 @@ private:
     {
 		float elapsedTime = (currentTime - startTime) * 0.001;   // Convert ms to s
         char info[256];
-        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Implemented Requirements: 1, 2, 3, 4, A, B, C", elapsedTime);
+        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Score: %d | Implemented Requirements: 1, 2, 3, 4, A, B, C", elapsedTime, points);
 
         // Draw info panel
         DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
@@ -477,7 +486,7 @@ private:
 		// Draw bonus
         if (bonusActive)
         {
-            DrawRectangle(screen, bonus.x, bonus.y, SEGMENT_SIZE, SEGMENT_SIZE, NULL, RED_DOT_COLOR);
+            DrawRectangle(screen, bonus.x, bonus.y, SEGMENT_SIZE, SEGMENT_SIZE, NULL, BONUS_COLOR);
 			DrawBonusProgressBar();
         }
 		
@@ -500,6 +509,7 @@ private:
         startTime = SDL_GetTicks();
         lastSpeedUpTime = startTime;
 		bonusActive = 0;
+        points = 0;
     }
 
 public:
@@ -571,6 +581,7 @@ public:
             {
                 snake.Grow();
                 GenerateFood();
+				points += FOOD_POINTS;
             }
 
             snake.Move(currentTime);
