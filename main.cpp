@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 extern "C"
@@ -24,8 +25,9 @@ extern "C"
 #define WINDOW_HEIGHT 640
 #define SEGMENT_SIZE 20 // Basic board unit
 #define INFO_PANEL_HEIGHT 40
-#define BOARD_WIDTH (SEGMENT_SIZE * 40)
-#define BOARD_HEIGHT (SEGMENT_SIZE * 30)
+#define BOARD_WIDTH (SEGMENT_SIZE * 25)
+#define BOARD_HEIGHT (SEGMENT_SIZE * 25)
+#define GAME_OVER_TEXT_SCALE 2.5
 
 // Board edges (x and y coordinates)
 #define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
@@ -38,8 +40,8 @@ extern "C"
 #define INITIAL_SNAKE_Y (TOP_EDGE + (BOARD_HEIGHT / 2 / SEGMENT_SIZE) * SEGMENT_SIZE)
 #define INITIAL_SNAKE_LENGTH 3  // Number of segments
 #define INITIAL_SNAKE_MOVE_INTERVAL 200 // ms
-#define SPEED_UP_INTERVAL 5000 // ms
-#define SPEED_UP_FACTOR 0.95 // Range (0, 1) for increasing speed
+#define SPEED_UP_INTERVAL 7000 // ms
+#define SPEED_UP_FACTOR 0.9 // Range (0, 1) for increasing speed
 
 // Food settings
 #define FOOD_POINTS 1
@@ -47,7 +49,7 @@ extern "C"
 // Bonus dot settings
 #define BONUS_PROBABILITY 30 // %
 #define BONUS_INTERVAL 3000 // ms
-#define BONUS_DURATION 7000 // ms
+#define BONUS_DURATION 5000 // ms
 #define BONUS_SHRINK_COUNT 3 // Segments to shorten
 #define BONUS_SLOW_DOWN_FACTOR 1.2 // Range (1, inf) for decreasing speed
 #define BONUS_POINTS 2
@@ -114,14 +116,14 @@ void DrawRectangle(SDL_Surface* screen, int x, int y, int width, int height, Uin
     }
 }
 
-void DrawString(SDL_Surface* screen, int x, int y, const char* text, SDL_Surface* charset)
+void DrawString(SDL_Surface* screen, int x, int y, const char* text, SDL_Surface* charset, float scale)
 {
     int px, py, c;
     SDL_Rect s, d;
     s.w = 8;
     s.h = 8;
-    d.w = 8;
-    d.h = 8;
+    d.w = 8 * scale;
+    d.h = 8 * scale;
     while (*text)
     {
         c = *text & 255;
@@ -131,8 +133,8 @@ void DrawString(SDL_Surface* screen, int x, int y, const char* text, SDL_Surface
         s.y = py;
         d.x = x;
         d.y = y;
-        SDL_BlitSurface(charset, &s, screen, &d);
-        x += 8;
+        SDL_BlitScaled(charset, &s, screen, &d);
+        x += 8 * scale;
         text++;
     }
 }
@@ -360,7 +362,6 @@ private:
             int barWidth = (int)((1.0 - (float)elapsedTime / BONUS_DURATION) * BOARD_WIDTH);
             DrawRectangle(screen, LEFT_EDGE, INFO_PANEL_HEIGHT - 10, barWidth, 5, NULL, BONUS_COLOR);
         }
-
     }
 
     void GameOver()
@@ -390,9 +391,15 @@ private:
 
             SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
 
-            char info[256];
-            sprintf(info, "Game Over! Your Score: %d | Press 'Esc' to Quit or 'n' to Restart", points);
-            DrawString(screen, WINDOW_WIDTH / 3, WINDOW_HEIGHT / 2, info, charset);
+            const char* gameOver = "Game Over!";
+            char scoreInfo[32];
+            sprintf(scoreInfo, "Score: %d", points);
+            const char* hint = "Press 'Esc' to Quit or 'n' to Restart";
+			int textScale = 8 * GAME_OVER_TEXT_SCALE;   // Scale up and adjust the position based on the text size
+
+            DrawString(screen, (WINDOW_WIDTH - textScale * strlen(gameOver)) / 2, WINDOW_HEIGHT / 2 - 50, "Game Over!", charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, (WINDOW_WIDTH - textScale * strlen(scoreInfo)) / 2, WINDOW_HEIGHT / 2, scoreInfo, charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, (WINDOW_WIDTH - textScale * strlen(hint)) / 2, WINDOW_HEIGHT / 2 + 50, "Press 'Esc' to Quit or 'n' to Restart", charset, GAME_OVER_TEXT_SCALE);
 
             RefreshScreen();
         }
@@ -469,13 +476,15 @@ private:
 
     void UpdateScreen()
     {
+        SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
+
 		float elapsedTime = (currentTime - startTime) * 0.001;   // Convert ms to s
         char info[256];
-        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Score: %d | Implemented Requirements: 1, 2, 3, 4, A, B, C", elapsedTime, points);
+        sprintf(info, "'Esc' - Quit | 'n' - Restart | Time: %.2f s | Score: %d | Implemented Requirements: 1, 2, 3, 4, A, B, C, D", elapsedTime, points);
 
         // Draw info panel
         DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
-        DrawString(screen, 15, 15, info, charset);
+        DrawString(screen, 15, 15, info, charset, 1);
 
         // Draw game board
         DrawRectangle(screen, LEFT_EDGE, TOP_EDGE, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
@@ -533,7 +542,7 @@ public:
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
         SDL_RenderSetLogicalSize(renderer, WINDOW_WIDTH, WINDOW_HEIGHT);
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_SetWindowTitle(window, "Snake");
+        SDL_SetWindowTitle(window, "Snake | Kacper Neumann, 203394");
         SDL_ShowCursor(SDL_DISABLE);
 
         screen = SDL_CreateRGBSurface(0, WINDOW_WIDTH, WINDOW_HEIGHT, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
