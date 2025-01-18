@@ -165,6 +165,7 @@ private:
     Direction direction;
     Uint32 lastMoveTime;
     int moveInterval;
+    int mayChangeDirection; // Flag to prevent changing direction twice in one move
 
     int IsOppositeDirection(Direction newDirection)
     {
@@ -216,6 +217,7 @@ public:
         direction = RIGHT;
         lastMoveTime = SDL_GetTicks();
 		moveInterval = INITIAL_SNAKE_MOVE_INTERVAL;
+		mayChangeDirection = 1;
         for (int i = 0; i < length; i++)
         {
             body[i].x = INITIAL_SNAKE_X - i * SEGMENT_SIZE;
@@ -225,9 +227,10 @@ public:
 
     void SetDirection(Direction newDirection)
     {
-        if (!IsOppositeDirection(newDirection) && !IsDirectionIntoEdge(newDirection))
+        if (mayChangeDirection && !IsOppositeDirection(newDirection) && !IsDirectionIntoEdge(newDirection))
         {
             direction = newDirection;
+			mayChangeDirection = 0;
         }
     }
 
@@ -309,6 +312,7 @@ public:
             }
 
             lastMoveTime = currentTime;
+			mayChangeDirection = 1;
         }
     }
 
