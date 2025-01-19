@@ -24,22 +24,25 @@ extern "C"
 #define WINDOW_WIDTH 1080
 #define WINDOW_HEIGHT 640
 #define SEGMENT_SIZE 20 // Basic board unit
-#define INFO_HEIGHT 50
+#define INFO_PANEL_HEIGHT 50
 #define BOARD_WIDTH (SEGMENT_SIZE * 25)
 #define BOARD_HEIGHT (SEGMENT_SIZE * 25)
 #define PROGRESS_BAR_WIDTH 200
 #define PROGRESS_BAR_HEIGHT 20
 
-// Positioning
+// Positioning of info panel, board edges & progress bar
+#define INFO_PANEL_Y 0
 #define LEFT_EDGE ((WINDOW_WIDTH - BOARD_WIDTH) / 2)
 #define RIGHT_EDGE (LEFT_EDGE + BOARD_WIDTH)
-#define TOP_EDGE (INFO_HEIGHT)
+#define TOP_EDGE (INFO_PANEL_Y + INFO_PANEL_HEIGHT + 40)
 #define BOTTOM_EDGE (TOP_EDGE + BOARD_HEIGHT)
 #define PROGRESS_BAR_X ((WINDOW_WIDTH - PROGRESS_BAR_WIDTH) / 2)
 #define PROGRESS_BAR_Y (BOTTOM_EDGE + 10)
 
 // Text settings
-#define INFO_TEXT_SCALE 1
+#define INFO_PANEL_TEXT_Y 20
+#define INFO_PANEL_TEXT_SCALE 1
+#define GAME_OVER_TEXT_Y (WINDOW_HEIGHT / 2)
 #define GAME_OVER_TEXT_SCALE 2.5
 
 // Snake settings
@@ -84,6 +87,7 @@ typedef struct
 } Segment;
 
 // --- UTILITY FUNCTIONS ---
+// Random integer from a closed interval <min, max>
 int RandomInt(int min, int max)
 {
     return rand() % (max - min + 1) + min;
@@ -164,7 +168,7 @@ private:
 	Segment* head;  // Pointer to body[0]
     Direction direction;
     Uint32 lastMoveTime;
-    int moveInterval;
+    int moveInterval;   // Speed
     int mayChangeDirection; // Flag to prevent changing direction twice in one move
 
     int IsOppositeDirection(Direction newDirection)
@@ -373,13 +377,13 @@ private:
     void DrawBonusProgressBar()
     {
         Uint32 elapsedTime = currentTime - lastBonusTime;
-        if (elapsedTime >= BONUS_DURATION)
+		if (elapsedTime >= BONUS_DURATION)  // Deactivate bonus if expired
         {
             bonusActive = 0;
         }
         else
         {
-            int barWidth = (int)((1.0 - (float)elapsedTime / BONUS_DURATION) * PROGRESS_BAR_WIDTH);
+			int barWidth = (int)((1.0 - (float)elapsedTime / BONUS_DURATION) * PROGRESS_BAR_WIDTH); // Progress bar is shrinking to 0
             DrawRectangle(screen, PROGRESS_BAR_X, PROGRESS_BAR_Y, PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT, OUTLINE_COLOR, NULL);
             DrawRectangle(screen, PROGRESS_BAR_X, PROGRESS_BAR_Y, barWidth, PROGRESS_BAR_HEIGHT, NULL, BONUS_COLOR);
         }
@@ -417,9 +421,9 @@ private:
             sprintf(score, "Score: %d", points);
             const char* hint = "Press 'Esc' to Quit or 'n' to Restart";
 
-            DrawString(screen, CenterTextX(gameOver, GAME_OVER_TEXT_SCALE), WINDOW_HEIGHT / 2 - 50, gameOver, charset, GAME_OVER_TEXT_SCALE);
-            DrawString(screen, CenterTextX(score, GAME_OVER_TEXT_SCALE), WINDOW_HEIGHT / 2, score, charset, GAME_OVER_TEXT_SCALE);
-            DrawString(screen, CenterTextX(hint, GAME_OVER_TEXT_SCALE), WINDOW_HEIGHT / 2 + 50, hint, charset, GAME_OVER_TEXT_SCALE);;
+            DrawString(screen, CenterTextX(gameOver, GAME_OVER_TEXT_SCALE), GAME_OVER_TEXT_Y - 50, gameOver, charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, CenterTextX(score, GAME_OVER_TEXT_SCALE), GAME_OVER_TEXT_Y, score, charset, GAME_OVER_TEXT_SCALE);
+            DrawString(screen, CenterTextX(hint, GAME_OVER_TEXT_SCALE), GAME_OVER_TEXT_Y + 50, hint, charset, GAME_OVER_TEXT_SCALE);
 
             RefreshScreen();
         }
@@ -463,12 +467,14 @@ private:
 
     void HandleBonus()
     {
+		// Deactivate bonus if expired
         if (bonusActive && currentTime - lastBonusTime >= BONUS_DURATION)
         {
             bonusActive = 0;
 			lastBonusTime = currentTime;
         }
 
+		// Try to generate bonus if the interval has passed
         if (!bonusActive && currentTime - lastBonusTime >= BONUS_INTERVAL)
         {
             if (RandomInt(1, 100) <= BONUS_PROBABILITY)
@@ -478,12 +484,13 @@ private:
             lastBonusTime = currentTime;
         }
 
+		// Handle collision if active
         if (bonusActive && snake.HeadCollidesWith(bonus))
         {
 			points += BONUS_POINTS;
             bonusActive = 0;
             lastBonusTime = currentTime;
-            if (RandomInt(0, 1) == 0)
+			if (RandomInt(0, 1) == 0)   // Randomly choose bonus effect
             {
                 snake.Shrink(BONUS_SHRINK_COUNT);
             }
@@ -498,13 +505,13 @@ private:
     {
         SDL_FillRect(screen, NULL, BACKGROUND_COLOR);
 
-		float elapsedTime = (currentTime - startTime) * 0.001;   // Convert ms to s
+		float elapsedTime = (currentTime - startTime) * 0.001;  // Convert ms to s
 		char info[256];
         sprintf(info, "'Esc' - Quit  |  'n' - Restart  |  Time: %.2f s  |  Score: %d  |  Implemented Requirements: 1, 2, 3, 4, A, B, C, D", elapsedTime, points);
 
-        // Draw info
-        DrawString(screen, CenterTextX(info, 1), 20, info, charset, INFO_TEXT_SCALE);
-        DrawRectangle(screen, 0, 0, WINDOW_WIDTH, INFO_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
+        // Draw info panel
+        DrawString(screen, CenterTextX(info, 1), INFO_PANEL_TEXT_Y, info, charset, INFO_PANEL_TEXT_SCALE);
+        DrawRectangle(screen, 0, INFO_PANEL_Y, WINDOW_WIDTH, INFO_PANEL_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
 
         // Draw game board
         DrawRectangle(screen, LEFT_EDGE, TOP_EDGE, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
@@ -598,7 +605,7 @@ public:
             HandleControls();
 
             currentTime = SDL_GetTicks();
-            if (currentTime - lastSpeedUpTime >= SPEED_UP_INTERVAL)
+			if (currentTime - lastSpeedUpTime >= SPEED_UP_INTERVAL) // Speed up
             {
                 snake.AdjustSpeed(SPEED_UP_FACTOR);
                 lastSpeedUpTime = currentTime;
@@ -606,14 +613,14 @@ public:
 
             HandleBonus();
 
-            if (snake.HeadCollidesWith(food))
+			if (snake.HeadCollidesWith(food))   // Handle food collision
             {
                 snake.Grow();
                 GenerateFood();
 				points += FOOD_POINTS;
             }
 
-            snake.Move(currentTime);
+			snake.Move(currentTime);    // Move & check for collision with itself
             if (snake.SelfCollision())
             {
                 GameOver();
@@ -640,7 +647,7 @@ int main(int argc, char** argv)
     srand(time(NULL));
 
     Game game;
-	if (game.GetInitialized() == 0)
+	if (game.GetInitialized() == 0) // Initialization failed
     {
 		return EXIT_FAILURE;
     }
