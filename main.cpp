@@ -136,6 +136,20 @@ void DrawRectangle(SDL_Surface* screen, int x, int y, int width, int height, Uin
     }
 }
 
+void DrawCircle(SDL_Surface* screen, int cx, int cy, int radius, Uint32 color)
+{
+    for (int y = -radius; y < radius; y++)
+    {
+        for (int x = -radius; x < radius; x++)
+        {
+            if (x * x + y * y < radius * radius)
+            {
+                DrawPixel(screen, cx + x, cy + y, color);
+            }
+        }
+    }
+}
+
 void DrawString(SDL_Surface* screen, int x, int y, const char* text, SDL_Surface* charset, float scale)
 {
     int px, py, c;
@@ -517,12 +531,12 @@ private:
         DrawRectangle(screen, LEFT_EDGE, TOP_EDGE, BOARD_WIDTH, BOARD_HEIGHT, OUTLINE_COLOR, BACKGROUND_COLOR);
 
 		// Draw food
-        DrawRectangle(screen, food.x, food.y, SEGMENT_SIZE, SEGMENT_SIZE, NULL, FOOD_COLOR);
+        DrawCircle(screen, food.x + SEGMENT_SIZE / 2, food.y + SEGMENT_SIZE / 2, SEGMENT_SIZE / 2 - 1, FOOD_COLOR);
 
 		// Draw bonus
         if (bonusActive)
         {
-            DrawRectangle(screen, bonus.x, bonus.y, SEGMENT_SIZE, SEGMENT_SIZE, NULL, BONUS_COLOR);
+            DrawCircle(screen, bonus.x + SEGMENT_SIZE / 2, bonus.y + SEGMENT_SIZE / 2, SEGMENT_SIZE / 2 - 1, BONUS_COLOR);
 			DrawBonusProgressBar();
         }
 		
